@@ -1,0 +1,58 @@
+name: Staffbase release
+
+# Staffbase fork only — never part of an upstream pull request. See STAFFBASE.md.
+#
+# Publishes a fork release to the Staffbase Artifact Registry, never to Maven Central: the
+# `org.sempods` namespace on Central belongs to upstream. Triggered by a tag such as
+# `v0.2.0-staffbase.1` on a `staffbase/*` line, and nothing else.
+on:
+  push:
+    tags: [ 'v*-staffbase.*' ]
+
+permissions:
+  contents: read
+  # Workload Identity Federation into the Artifact Registry.
+  id-token: write
+
+concurrency:
+  group: staffbase-release
+  cancel-in-progress: false
+
+jobs:
+
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # A fork version must never equal an upstream one: the backend resolves upstream versions
+      # through the same registry, and a same-named fork artifact would shadow them.
+      - name: Check the version
+        run: |
+          VERSION=$(sed -n 's/^version=//p' gradle.properties)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-staffbase\.[0-9]+$ ]]; then
+            echo "::error::gradle.properties names '$VERSION'; a fork release is <upstream>-staffbase.<n>"
+            exit 1
+          fi
+          if [[ "v$VERSION" != "$GITHUB_REF_NAME" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $VERSION in gradle.properties"
+            exit 1
+          fi
+
+      # The same suites and guards as `test.yml`. A tag is pushed, not merged, so nothing else
+      # proves the tagged commit.
+      - uses: ./.github/actions/setup-test-environment
+      - name: Run tests
+        run: ./gradlew test checkNoLoggingBinding checkNoTestLibrariesInPom checkNoMissingPomDependencies checkDocLinks checkImageMetadata checkPublishedSignatures --max-workers=2
+
+      - name: Authenticate to Artifact Registry
+        id: gar
+        uses: Staffbase/setup-artifact-registry-action@4e433ad228e04a5c9a9a3f9a59de9c4e2e7148e1 # v1.0.0
+        with:
+          configure: ''
+
+      - name: Publish
+        run: ./gradlew --init-script .github/staffbase/publish-to-gar.init.gradle.kts publishAllPublicationsToGarRepository
+        env:
+          ORG_GRADLE_PROJECT_garUsername: oauth2accesstoken
+          ORG_GRADLE_PROJECT_garPassword: ${{ steps.gar.outputs.access-token }}
