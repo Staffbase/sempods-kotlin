@@ -11,11 +11,14 @@ Why the backend consumes the fork at all:
 
 ## Branches
 
-| Branch                         | Holds                                                    | Based on                         |
-|--------------------------------|----------------------------------------------------------|----------------------------------|
-| `staffbase/<major>.<minor>`    | one fork release line: upstream tag + patches + tooling  | upstream tag `v<major>.<minor>.0` |
-| `feat/<topic>`, `fix/<topic>`  | one topic, later exactly one upstream pull request       | `upstream/main`                  |
-| `backport/<topic>-<line>`      | the topic's commits cherry-picked onto a release line    | `staffbase/<major>.<minor>`      |
+| Branch                        | Holds                                                   | Based on                  |
+|-------------------------------|---------------------------------------------------------|---------------------------|
+| `staffbase/<version>`         | one fork release line: upstream tag + patches + tooling | upstream tag `v<version>` |
+| `feat/<topic>`, `fix/<topic>` | one topic, later exactly one upstream pull request      | `upstream/main`           |
+| `backport/<topic>-<version>`  | the topic's commits cherry-picked onto a release line   | `staffbase/<version>`     |
+
+`<version>` is the full upstream version, e.g. `staffbase/0.2.0`. Each upstream release, patch releases
+included, gets its own line, and its fork releases are `<version>-staffbase.<n>`.
 
 The fork's `main` is not used. It sits behind Staffbase organisation rulesets and may lag upstream;
 always branch from `upstream/main` directly.
@@ -47,19 +50,19 @@ git config rerere.enabled true
 3. If the backend needs it before upstream releases it, backport it:
 
    ```bash
-   git switch -c backport/<topic>-0.2 origin/staffbase/0.2
+   git switch -c backport/<topic>-0.2.0 origin/staffbase/0.2.0
    git cherry-pick -x -s <commits of feat/<topic>>
    ```
 
-   Open a pull request into `staffbase/0.2`, then [release](#a-release).
+   Open a pull request into `staffbase/0.2.0`, then [release](#a-release).
 
-`-x` records the original commit, so `git log staffbase/0.2` shows where each patch came from.
+`-x` records the original commit, so `git log staffbase/0.2.0` shows where each patch came from.
 
 A **hotfix** is the same path, faster: open the upstream pull request and the backport together.
 
 ## A release
 
-1. Pull request into `staffbase/<line>` that sets `version=<upstream version>-staffbase.<n>` in
+1. Pull request into `staffbase/<version>` that sets `version=<upstream version>-staffbase.<n>` in
    `gradle.properties`, e.g. `0.2.0-staffbase.1`. Merge it.
 2. Tag the merged commit and push the tag:
 
@@ -73,18 +76,18 @@ A **hotfix** is the same path, faster: open the upstream pull request and the ba
 
 ## A new upstream release
 
-Upstream releases `v0.3.0`:
+Upstream releases `v0.3.0` (a patch release such as `v0.2.1` works the same way):
 
-1. `git switch -c staffbase/0.3 v0.3.0`, then cherry-pick the tooling commit from `staffbase/0.2`.
+1. `git switch -c staffbase/0.3.0 v0.3.0`, then cherry-pick the tooling commit from `staffbase/0.2.0`.
 2. For each row in [Patches](#patches): released upstream → delete the row; otherwise cherry-pick it
-   onto `staffbase/0.3`. `git range-diff` shows what changed while doing so.
+   onto `staffbase/0.3.0`. `git range-diff` shows what changed while doing so.
 3. No rows left → the backend pins `org.sempods:sempods-bom:0.3.0` and no fork release is needed.
 
-`staffbase/0.2` stays as it is; it is never rebased.
+`staffbase/0.2.0` stays as it is; it is never rebased.
 
 ## Patches
 
-The complete delta between the fork and upstream. `git log v0.2.0..origin/staffbase/0.2` shows the
+The complete delta between the fork and upstream. `git log v0.2.0..origin/staffbase/0.2.0` shows the
 tooling commit, version bumps and the patches listed here — nothing else.
 
 | Topic branch | Upstream pull request | In fork release | Status |
